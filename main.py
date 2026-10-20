@@ -875,5 +875,3 @@ async def on_message(message):
                 await message.reply(f"エラーが発生しました: {e}")
 
 bot.run(os.environ.get("DISCORD_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN"))
-
-↑これをRe.......なんとかのmain.pyに貼り替えれば多分モードができふ
