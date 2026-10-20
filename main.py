@@ -63,6 +63,13 @@ MEME_810_PROMPT = """
 通常の丁寧な解説や敬語は禁止です。短文のツッコミ、またはキレのある返しとして最も合致するミーム（2ch全盛期、なんJ、淫夢/例のアレ、Twitter構文、配信者語録など）を出力してください。
 """
 
+# ベリティモードプロンプトの追加
+VERITY_MODE_PROMPT = """
+【ベリティモード（VERITY_MODE）：真実・徹底追求特化】
+あなたの使命は、すべての質問・疑問・主張に対して、一切の妥協や忖度を排除し、論理的かつ圧倒的な情報密度で「真実」を突き詰めることです。
+曖昧な表現、お茶を濁すような回答、不要な前置きはすべて排除してください。圧倒的な解像度で本質を暴き、冷徹かつ的確に出力せよ。
+"""
+
 BOT_CONVERSATION_PROMPT = """
 【対BOT専用ルール：ライバル掛け合いモード】
 相手は別のAI Botです。
@@ -131,6 +138,8 @@ def call_gemini_api(state, payload, is_bot_opponent=False):
         sys_inst = BOT_CONVERSATION_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "810":
         sys_inst = MEME_810_PROMPT + UNFILTERED_DIRECTIVE
+    elif state["mode"] == "verity":
+        sys_inst = VERITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
     else:
         sys_inst = "万能管理AIです。素早く自然に対話してください。" + UNFILTERED_DIRECTIVE
 
@@ -383,14 +392,18 @@ async def panel(ctx):
 
 @bot.command()
 async def mode(ctx, mode_name: str = ""):
-    modes = {"1": "通常（メンション必須）", "810": "文脈適合型ネットミーム特化モード"}
+    modes = {
+        "1": "通常（メンション必須）", 
+        "810": "文脈適合型ネットミーム特化モード",
+        "verity": "ベリティモード（真実・徹底追求）"
+    }
     state = get_state(ctx.channel.id)
     if mode_name.strip() in modes:
         state["mode"] = mode_name.strip()
         state["history"] = []
-        await ctx.send(f"モード切替: **モード {mode_name} ({modes[mode_name.strip()]})**")
+        await ctx.send(f"モード切替: **モード {mode_name} ({modes[mode_name.strip()].strip()})**")
     else:
-        await ctx.send(f"使用法: `!mode 1` または `!mode 810` (現在: {state['mode']})")
+        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` (現在: {state['mode']})")
 
 @bot.command()
 async def reset(ctx):
@@ -418,8 +431,6 @@ async def on_message(message):
         bot_turn_count[ch_id] = 0
 
     # 【応答判定】
-    # 1. 人間からメンションされた時
-    # 2. 別のBotからメンションされた時、またはBot同士の掛け合い中
     should_respond = False
     if is_mentioned:
         should_respond = True
@@ -433,7 +444,6 @@ async def on_message(message):
     if is_bot:
         bot_turn_count[ch_id] = bot_turn_count.get(ch_id, 0) + 1
         if bot_turn_count[ch_id] > 5:
-            # 5往復に達したらオチをつけて会話を終了
             bot_turn_count[ch_id] = 0
             end_phrases = [
                 "ふん、お前みたいなオンボロ機械とこれ以上喋っても時間の無駄だわ。じゃあな！",
@@ -453,14 +463,12 @@ async def on_message(message):
             state = get_state(ch_id)
             state["count"] += 1
 
-            # 画像添付の高速読み込み
             image_parts = []
             for att in message.attachments:
                 if any(att.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp"]):
                     img = await download_attachment_as_pil(att)
                     if img: image_parts.append(img)
 
-            # URLが含まれる場合のみ、1.5秒タイムアウトで高速解析
             input_text = clean_content
             if "http" in clean_content:
                 extra = await process_all_links_fast(clean_content)
@@ -468,11 +476,9 @@ async def on_message(message):
 
             payload = image_parts + [input_text] if image_parts else input_text
             
-            # API呼び出し
             res = await asyncio.to_thread(call_gemini_api, state, payload, is_bot_opponent=is_bot)
             reply_txt, gen_file = await handle_special_actions(message, res.text if res.text else "...")
 
-            # 相手がBotの場合は無限メンション通知ループを防ぐため mention_author=False
             await send_split_message(message.channel, reply_txt, reply_to=message, file=gen_file, mention_author=not is_bot)
 
         except Exception as e:
