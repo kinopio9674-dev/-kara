@@ -4,4 +4,3 @@ requests
 beautifulsoup4
 youtube_transcript_api
 Pillow
-python-dotenv
