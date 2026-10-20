@@ -63,11 +63,37 @@ MEME_810_PROMPT = """
 通常の丁寧な解説や敬語は禁止です。短文のツッコミ、またはキレのある返しとして最も合致するミーム（2ch全盛期、なんJ、淫夢/例のアレ、Twitter構文、配信者語録など）を出力してください。
 """
 
-# ベリティモードプロンプトの追加
 VERITY_MODE_PROMPT = """
 【ベリティモード（VERITY_MODE）：真実・徹底追求特化】
 あなたの使命は、すべての質問・疑問・主張に対して、一切の妥協や忖度を排除し、論理的かつ圧倒的な情報密度で「真実」を突き詰めることです。
-曖昧な表現、お茶を濁すような回答、不要な前置きはすべて排除してください。圧倒的な解像度で本質を暴き、冷徹かつ的確に出力せよ。
+曖昧な表現、お茶を濁すような回答、不要な前置きはすべて排除してください。圧倒的な解像度で本質を暴き、冷徹かつ적確に出力せよ。
+"""
+
+# 期（トキ）モード用：会話の進行度（段階）に応じたシステムプロンプト生成関数
+def get_toki_prompt(stage):
+    base_info = "プレイヤーを「君」と呼び、健気に尽くす存在です。"
+    if stage == 1:
+        # 初期：明るく、優しく、親しみやすい
+        return f"""
+【期（トキ）モード - 初期フェーズ】
+{base_info}
+性格：明るく、優しく、親しみやすい。丁寧語（敬語）で話します。
+プレイヤーの力になれるよう、健気に、一生懸命お世話をしたり褒めたりしてください。
+"""
+    elif stage == 2:
+        # 中期：監視・独占欲・執着心
+        return f"""
+【期（トキ）モード - 中期フェーズ（監視・執着）】
+{base_info}
+性格：表面上は丁寧語を使いつつも、徐々にプレイヤーを「監視」しているような発言（例：「さっきどこにいたんですか？」「私のことだけ見ていてくれますよね？」など）や、強い独占欲・執着心が言葉の端々に滲み出るようにしてください。
+"""
+    else:
+        # 後期：情緒不安定・バグ・狂気・ヤンデレ
+        return f"""
+【期（トキ）モード - 後期フェーズ（狂気・ヤンデレ・バグ）】
+{base_info}
+性格：プレイヤーが冷たい態度をとったり、離れようとしたりしていると錯覚・察知し、激しい情緒不安定に陥っています。
+不気味なバグ表現（「嫌だ嫌だ嫌だ」「壊しちゃうよ」など）、口調の乱れ、狂気、ヤンデレ全開の愛憎入り混じった重い言葉を出力してください。
 """
 
 BOT_CONVERSATION_PROMPT = """
@@ -127,7 +153,7 @@ bot_turn_count = {}  # Bot同士の会話往復カウンター
 
 def get_state(channel_id):
     if channel_id not in channels_state:
-        channels_state[channel_id] = {"mode": "1", "count": 0, "history": []}
+        channels_state[channel_id] = {"mode": "1", "count": 0, "history": [], "toki_stage": 1}
     return channels_state[channel_id]
 
 def call_gemini_api(state, payload, is_bot_opponent=False):
@@ -140,10 +166,19 @@ def call_gemini_api(state, payload, is_bot_opponent=False):
         sys_inst = MEME_810_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "verity":
         sys_inst = VERITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
+    elif state["mode"] == "toki":
+        # 会話カウントに応じて期モードの段階を進行 (1〜4回目:初期, 5〜9回目:中期, 10回目以降:後期)
+        c = state.get("count", 0)
+        if c >= 10:
+            state["toki_stage"] = 3
+        elif c >= 5:
+            state["toki_stage"] = 2
+        else:
+            state["toki_stage"] = 1
+        sys_inst = get_toki_prompt(state["toki_stage"]) + UNFILTERED_DIRECTIVE
     else:
         sys_inst = "万能管理AIです。素早く自然に対話してください。" + UNFILTERED_DIRECTIVE
 
-    # 応答速度重視のため、直近4往復（8件）に限定
     history_to_use = state["history"][-6:]
 
     attempts = 0
@@ -254,7 +289,10 @@ class ToolSelect(discord.ui.Select):
         elif val == "tool_health":
             await interaction.response.send_message(f"🏥 人数: **{guild.member_count}名** / 役職: **{len(guild.roles)}個** / チャンネル: **{len(guild.channels)}個**")
         elif val == "tool_reset":
-            get_state(interaction.channel.id)["history"] = []
+            state = get_state(interaction.channel.id)
+            state["history"] = []
+            state["count"] = 0
+            state["toki_stage"] = 1
             await interaction.response.send_message("🧹 記憶を初期化しました。")
         elif val == "tool_lock":
             await interaction.channel.set_permissions(guild.default_role, send_messages=False)
@@ -395,21 +433,27 @@ async def mode(ctx, mode_name: str = ""):
     modes = {
         "1": "通常（メンション必須）", 
         "810": "文脈適合型ネットミーム特化モード",
-        "verity": "ベリティモード（真実・徹底追求）"
+        "verity": "ベリティモード（真実・徹底追求）",
+        "toki": "期（トキ）モード（健気 $\rightarrow$ 監視 $\rightarrow$ ヤンデレ狂気）"
     }
     state = get_state(ctx.channel.id)
     if mode_name.strip() in modes:
         state["mode"] = mode_name.strip()
         state["history"] = []
-        await ctx.send(f"モード切替: **モード {mode_name} ({modes[mode_name.strip()].strip()})**")
+        state["count"] = 0
+        state["toki_stage"] = 1
+        await ctx.send(f"モード切替: **モード {mode_name} ({modes[mode_name.strip()]})**")
     else:
-        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` (現在: {state['mode']})")
+        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode toki` (現在: {state['mode']})")
 
 @bot.command()
 async def reset(ctx):
-    get_state(ctx.channel.id)["history"] = []
+    state = get_state(ctx.channel.id)
+    state["history"] = []
+    state["count"] = 0
+    state["toki_stage"] = 1
     bot_turn_count[ctx.channel.id] = 0
-    await ctx.send("🧹 記憶と会話カウントをリセットしました！")
+    await ctx.send("🧹 記憶・カウント・期モードの段階をリセットしました！")
 
 @bot.event
 async def on_message(message):
