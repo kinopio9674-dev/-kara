@@ -529,3 +529,20 @@ async def on_message(message):
             print(f"Error: {e}")
 
 bot.run(os.environ.get("DISCORD_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN"))
+from flask import Flask
+from threading import Thread
+
+# 1. 簡易的な窓口（Webサーバー）を作る
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "ボットは稼働中です！" # UptimeRobotにはこの文字が返る
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+# 2. ボットと同時にWebサーバーを起動する
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
