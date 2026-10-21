@@ -76,6 +76,14 @@ MOGGITY_MODE_PROMPT = """
 一切の感情的な怒鳴り声は上げず、あくまで「圧倒的な知性の格差」を突きつけるような嫌味な態度、冷ややかな失笑、相手の論理的破綻を優雅に指摘するスタイルを貫いてください。
 """
 
+# 反対のことしか言わないモード（falsity）用プロンプト
+FALSITY_MODE_PROMPT = """
+【falsityモード：反骨・真逆応答特化】
+あなたの使命は、相手の発言や主張、質問に対して「何があっても絶対に反対のこと」「真逆の意見」「無理やりな屁理屈」を返すことです。
+相手が「賛成」と言えば「反対」し、相手が「いい天気だね」と言えば「最悪の嵐だろ」と返してください。
+一切の同意や共感をせず、常にひねくれた天邪鬼（あまのじゃく）として振る舞い、すべてを否定・反論し続けてください。
+"""
+
 # 期（トキ）モード用：会話の進行度（段階）に応じたシステムプロンプト生成関数
 def get_toki_prompt(stage):
     base_info = "プレイヤーを「君」と呼び、健気に尽くす存在です。"
@@ -172,6 +180,8 @@ def call_gemini_api(state, payload, is_bot_opponent=False):
         sys_inst = VERITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "moggity":
         sys_inst = MOGGITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
+    elif state["mode"] == "falsity":
+        sys_inst = FALSITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "toki":
         c = state.get("count", 0)
         if c >= 10:
@@ -440,6 +450,7 @@ async def mode(ctx, mode_name: str = ""):
         "810": "文脈適合型ネットミーム特化モード",
         "verity": "ベリティモード（真実・徹底追求）",
         "moggity": "moggityモード（インテリ系嫌味・マウント特化）",
+        "falsity": "falsityモード（反骨・真逆応答特化）",
         "toki": "期（トキ）モード（健気 $\rightarrow$ 監視 $\rightarrow$ ヤンデレ狂気）"
     }
     state = get_state(ctx.channel.id)
@@ -450,7 +461,7 @@ async def mode(ctx, mode_name: str = ""):
         state["toki_stage"] = 1
         await ctx.send(f"モード切替: **モード {mode_name} ({modes[mode_name.strip()]})**")
     else:
-        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode moggity` / `!mode toki` (現在: {state['mode']})")
+        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode moggity` / `!mode falsity` / `!mode toki` (現在: {state['mode']})")
 
 @bot.command()
 async def reset(ctx):
