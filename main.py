@@ -539,7 +539,6 @@ async def on_message(message):
 bot.run(os.environ.get("DISCORD_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN"))
 from flask import Flask
 from threading import Thread
-
 # 1. 簡易的な窓口（Webサーバー）を作る
 app = Flask('')
 
