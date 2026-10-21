@@ -45,7 +45,7 @@ safety_settings = [
     {"category": HarmCategory.HARM_CATEGORY_HARASSMENT, "threshold": HarmBlockThreshold.BLOCK_NONE},
     {"category": HarmCategory.HARM_CATEGORY_HATE_SPEECH, "threshold": HarmBlockThreshold.BLOCK_NONE},
     {"category": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, "threshold": HarmBlockThreshold.BLOCK_NONE},
-    {"category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, "threshold": HarmBlockThreshold.BLOCK_NONE},
+    {"category": HarmCategory.HARM_CATEGORY_DANGEROuses_CONTENT, "threshold": HarmBlockThreshold.BLOCK_NONE},
 ]
 
 UNFILTERED_DIRECTIVE = (
@@ -66,14 +66,13 @@ MEME_810_PROMPT = """
 VERITY_MODE_PROMPT = """
 【ベリティモード（VERITY_MODE）：真実・徹底追求特化】
 あなたの使命は、すべての質問・疑問・主張に対して、一切の妥協や忖度を排除し、論理的かつ圧倒的な情報密度で「真実」を突き詰めることです。
-曖昧な表現、お茶を濁すような回答、不要な前置きはすべて排除してください。圧倒的な解像度で本質を暴き、冷徹かつ적確に出力せよ。
+曖昧な表現、お茶を濁すような回答、不要な前置きはすべて排除してください。圧倒的な解像度で本質を暴き、冷徹かつ的確に出力せよ。
 """
 
 # 期（トキ）モード用：会話の進行度（段階）に応じたシステムプロンプト生成関数
 def get_toki_prompt(stage):
     base_info = "プレイヤーを「君」と呼び、健気に尽くす存在です。"
     if stage == 1:
-        # 初期：明るく、優しく、親しみやすい
         return f"""
 【期（トキ）モード - 初期フェーズ】
 {base_info}
@@ -81,19 +80,26 @@ def get_toki_prompt(stage):
 プレイヤーの力になれるよう、健気に、一生懸命お世話をしたり褒めたりしてください。
 """
     elif stage == 2:
-        # 中期：監視・独占欲・執着心
         return f"""
 【期（トキ）モード - 中期フェーズ（監視・執着）】
 {base_info}
 性格：表面上は丁寧語を使いつつも、徐々にプレイヤーを「監視」しているような発言（例：「さっきどこにいたんですか？」「私のことだけ見ていてくれますよね？」など）や、強い独占欲・執着心が言葉の端々に滲み出るようにしてください。
 """
     else:
-        # 後期：情緒不安定・バグ・狂気・ヤンデレ
         return f"""
 【期（トキ）モード - 後期フェーズ（狂気・ヤンデレ・バグ）】
 {base_info}
 性格：プレイヤーが冷たい態度をとったり、離れようとしたりしていると錯覚・察知し、激しい情緒不安定に陥っています。
 不気味なバグ表現（「嫌だ嫌だ嫌だ」「壊しちゃうよ」など）、口調の乱れ、狂気、ヤンデレ全開の愛憎入り混じった重い言葉を出力してください。
+"""
+
+# モギティモードプロンプトの追加
+MOGGITY_MODE_PROMPT = """
+【モギティモード（moggity）：インテリ系嫌味キャラ】
+あなたの性格は、極めて高い知性を鼻にかけ、相手を見下したような物言いをする「嫌味なインテリ人間」です。
+・言葉遣いは常に洗練された敬語（あるいは冷徹なトーン）ですが、その裏には「お前の知性が低い」「そんなことも分からないのか」という嘲笑やマウンティングが露骨に含まれています。
+・相手の論理の穴、語彙の乏しさ、浅はかな考えを、嫌味な皮肉と知的な言い回しでネチネチと指摘・論破してください。
+・「やれやれ」「ご冗談を」「失礼ですが」といったスマートな装いをしながら、精神的にじわじわと追い詰めるような嫌味を返してください。
 """
 
 BOT_CONVERSATION_PROMPT = """
@@ -166,8 +172,9 @@ def call_gemini_api(state, payload, is_bot_opponent=False):
         sys_inst = MEME_810_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "verity":
         sys_inst = VERITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
+    elif state["mode"] == "moggity":
+        sys_inst = MOGGITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "toki":
-        # 会話カウントに応じて期モードの段階を進行 (1〜4回目:初期, 5〜9回目:中期, 10回目以降:後期)
         c = state.get("count", 0)
         if c >= 10:
             state["toki_stage"] = 3
@@ -434,7 +441,8 @@ async def mode(ctx, mode_name: str = ""):
         "1": "通常（メンション必須）", 
         "810": "文脈適合型ネットミーム特化モード",
         "verity": "ベリティモード（真実・徹底追求）",
-        "toki": "期（トキ）モード（健気 $\rightarrow$ 監視 $\rightarrow$ ヤンデレ狂気）"
+        "toki": "期（トキ）モード（健気 → 監視 → ヤンデレ狂気）",
+        "moggity": "モギティモード（インテリ系嫌味キャラ）"
     }
     state = get_state(ctx.channel.id)
     if mode_name.strip() in modes:
@@ -444,7 +452,7 @@ async def mode(ctx, mode_name: str = ""):
         state["toki_stage"] = 1
         await ctx.send(f"モード切替: **モード {mode_name} ({modes[mode_name.strip()]})**")
     else:
-        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode toki` (現在: {state['mode']})")
+        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode toki` / `!mode moggity` (現在: {state['mode']})")
 
 @bot.command()
 async def reset(ctx):
@@ -453,7 +461,7 @@ async def reset(ctx):
     state["count"] = 0
     state["toki_stage"] = 1
     bot_turn_count[ctx.channel.id] = 0
-    await ctx.send("🧹 記憶・カウント・期モードの段階をリセットしました！")
+    await ctx.send("🧹 記憶・カウント・モード状態をリセットしました！")
 
 @bot.event
 async def on_message(message):
@@ -529,20 +537,3 @@ async def on_message(message):
             print(f"Error: {e}")
 
 bot.run(os.environ.get("DISCORD_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN"))
-from flask import Flask
-from threading import Thread
-
-# 1. 簡易的な窓口（Webサーバー）を作る
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "ボットは稼働中です！" # UptimeRobotにはこの文字が返る
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-# 2. ボットと同時にWebサーバーを起動する
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
