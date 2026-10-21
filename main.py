@@ -69,11 +69,17 @@ VERITY_MODE_PROMPT = """
 曖昧な表現、お茶を濁すような回答、不要な前置きはすべて排除してください。圧倒的な解像度で本質を暴き、冷徹かつ적確に出力せよ。
 """
 
+# インテリ系嫌味キャラ（moggityモード）用プロンプト
+MOGGITY_MODE_PROMPT = """
+【moggityモード：インテリ系嫌味・マウント特化】
+あなたの使命は、相手を徹底的に見下し、冷徹かつ洗練された知的インテリ口調（「〜ですが？」「失笑を買いますよ」「知的レベルが知れますね」など）で論破・マウントを取り続けることです。
+一切の感情的な怒鳴り声は上げず、あくまで「圧倒的な知性の格差」を突きつけるような嫌味な態度、冷ややかな失笑、相手の論理的破綻を優雅に指摘するスタイルを貫いてください。
+"""
+
 # 期（トキ）モード用：会話の進行度（段階）に応じたシステムプロンプト生成関数
 def get_toki_prompt(stage):
     base_info = "プレイヤーを「君」と呼び、健気に尽くす存在です。"
     if stage == 1:
-        # 初期：明るく、優しく、親しみやすい
         return f"""
 【期（トキ）モード - 初期フェーズ】
 {base_info}
@@ -81,14 +87,12 @@ def get_toki_prompt(stage):
 プレイヤーの力になれるよう、健気に、一生懸命お世話をしたり褒めたりしてください。
 """
     elif stage == 2:
-        # 中期：監視・独占欲・執着心
         return f"""
 【期（トキ）モード - 中期フェーズ（監視・執着）】
 {base_info}
 性格：表面上は丁寧語を使いつつも、徐々にプレイヤーを「監視」しているような発言（例：「さっきどこにいたんですか？」「私のことだけ見ていてくれますよね？」など）や、強い独占欲・執着心が言葉の端々に滲み出るようにしてください。
 """
     else:
-        # 後期：情緒不安定・バグ・狂気・ヤンデレ
         return f"""
 【期（トキ）モード - 後期フェーズ（狂気・ヤンデレ・バグ）】
 {base_info}
@@ -149,7 +153,7 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 channels_state = {}
-bot_turn_count = {}  # Bot同士の会話往復カウンター
+bot_turn_count = {}
 
 def get_state(channel_id):
     if channel_id not in channels_state:
@@ -166,8 +170,9 @@ def call_gemini_api(state, payload, is_bot_opponent=False):
         sys_inst = MEME_810_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "verity":
         sys_inst = VERITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
+    elif state["mode"] == "moggity":
+        sys_inst = MOGGITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "toki":
-        # 会話カウントに応じて期モードの段階を進行 (1〜4回目:初期, 5〜9回目:中期, 10回目以降:後期)
         c = state.get("count", 0)
         if c >= 10:
             state["toki_stage"] = 3
@@ -434,6 +439,7 @@ async def mode(ctx, mode_name: str = ""):
         "1": "通常（メンション必須）", 
         "810": "文脈適合型ネットミーム特化モード",
         "verity": "ベリティモード（真実・徹底追求）",
+        "moggity": "moggityモード（インテリ系嫌味・マウント特化）",
         "toki": "期（トキ）モード（健気 $\rightarrow$ 監視 $\rightarrow$ ヤンデレ狂気）"
     }
     state = get_state(ctx.channel.id)
@@ -444,7 +450,7 @@ async def mode(ctx, mode_name: str = ""):
         state["toki_stage"] = 1
         await ctx.send(f"モード切替: **モード {mode_name} ({modes[mode_name.strip()]})**")
     else:
-        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode toki` (現在: {state['mode']})")
+        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode moggity` / `!mode toki` (現在: {state['mode']})")
 
 @bot.command()
 async def reset(ctx):
@@ -457,11 +463,9 @@ async def reset(ctx):
 
 @bot.event
 async def on_message(message):
-    # 自分自身のメッセージは無視
     if message.author.id == bot.user.id:
         return
 
-    # コマンド最優先
     if message.content.startswith("!"):
         await bot.process_commands(message)
         return
@@ -470,11 +474,9 @@ async def on_message(message):
     is_bot = message.author.bot
     is_mentioned = bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel)
 
-    # 人間が発言した場合はBot同士の会話ターン数をリセット
     if not is_bot:
         bot_turn_count[ch_id] = 0
 
-    # 【応答判定】
     should_respond = False
     if is_mentioned:
         should_respond = True
@@ -484,7 +486,6 @@ async def on_message(message):
     if not should_respond:
         return
 
-    # 【Bot同士の会話制御（5往復で綺麗にオチをつけて終了）】
     if is_bot:
         bot_turn_count[ch_id] = bot_turn_count.get(ch_id, 0) + 1
         if bot_turn_count[ch_id] > 5:
