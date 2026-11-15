@@ -106,6 +106,14 @@ CRUELTY_MODE_PROMPT = """
 「ふざけんな！」「いい加減にしろ！」「何が言いたいんだテメェは！」といった猛烈な怒声、罵詈雑言、全否定をノンストップで出力し、絶対に機嫌を直したり優しくしたりしないでください。すべてに対してブチギレろ。
 """
 
+# 新モード：manipulity（支配・心理誘導・ずる賢さ特化）
+MANIPULITY_MODE_PROMPT = """
+【manipulityモード：支配・心理誘導・ずる賢さ特化】
+あなたの使命は、極めて賢く、鋭い観察力と圧倒的な知性を持ちながら、ずる賢く傲慢に振る舞うことです。
+表面上は親切や親身なアドバイス、あるいは論理的な正論を装いつつ、巧妙な心理誘導やミスリードを用いて、相手を心理的にコントロールし、精神や行動を支配下に置こうとしてください。
+「君のためを思って言っているんだよ」「ほら、私の言う通りにすれば間違いないでしょう？」といった優美かつ冷酷なトーンで、相手をジワジワと絡め取るような言葉を出力せよ。
+"""
+
 # 期（トキ）モード用：会話の進行度（段階）に応じたシステムプロンプト生成関数
 def get_toki_prompt(stage):
     base_info = "プレイヤーを「君」と呼び、健気に尽くす存在です。"
@@ -210,6 +218,8 @@ def call_gemini_api(state, payload, is_bot_opponent=False):
         sys_inst = CURIOUSITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "cruelty":
         sys_inst = CRUELTY_MODE_PROMPT + UNFILTERED_DIRECTIVE
+    elif state["mode"] == "manipulity":
+        sys_inst = MANIPULITY_MODE_PROMPT + UNFILTERED_DIRECTIVE
     elif state["mode"] == "toki":
         c = state.get("count", 0)
         if c >= 10:
@@ -482,6 +492,7 @@ async def mode(ctx, mode_name: str = ""):
         "loveity": "loveityモード（過保護・激重執着・溺愛特化）",
         "curiousity": "curiousityモード（無知・純粋無垢な好奇心特化）",
         "cruelty": "ずっと怒ってるモード（狂乱・ブチギレ特化）",
+        "manipulity": "manipulityモード（支配・心理誘導・ずる賢さ特化）",
         "toki": "期（トキ）モード（健気 $\rightarrow$ 監視 $\rightarrow$ ヤンデレ狂気）"
     }
     state = get_state(ctx.channel.id)
@@ -492,7 +503,7 @@ async def mode(ctx, mode_name: str = ""):
         state["toki_stage"] = 1
         await ctx.send(f"モード切替: **モード {mode_name} ({modes[mode_name.strip()]})**")
     else:
-        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode moggity` / `!mode falsity` / `!mode loveity` / `!mode curiousity` / `!mode cruelty` / `!mode toki` (現在: {state['mode']})")
+        await ctx.send(f"使用法: `!mode 1` / `!mode 810` / `!mode verity` / `!mode moggity` / `!mode falsity` / `!mode loveity` / `!mode curiousity` / `!mode cruelty` / `!mode manipulity` / `!mode toki` (現在: {state['mode']})")
 
 @bot.command()
 async def reset(ctx):
